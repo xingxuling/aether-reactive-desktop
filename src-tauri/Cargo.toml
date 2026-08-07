@@ -1,0 +1,29 @@
+[package]
+name = "aether-desktop-toys"
+version = "0.2.0"
+description = "Aether Reactive Desktop — a Windows desktop environment that responds to what is happening"
+authors = ["Aether"]
+edition = "2021"
+rust-version = "1.77.2"
+build = "build.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
+windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
+windows = { version = "0.61.3", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Media_Audio",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Registry",
+  "Win32_System_Variant",
+  "Win32_Security",
+  "Win32_UI_WindowsAndMessaging"
+] }

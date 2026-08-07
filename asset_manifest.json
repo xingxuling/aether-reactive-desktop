@@ -1,0 +1,7 @@
+{
+  "version": "0.1.0",
+  "strategy": "procedural-canvas",
+  "externalAssets": [],
+  "generatedAssets": [],
+  "notes": "v0.1 uses procedural Canvas 2D drawing; no raster asset is required for the five toy loop."
+}
