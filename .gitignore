@@ -13,3 +13,4 @@ src-tauri/icons/Square*.png
 !*.example
 .playwright-cli/
 output/playwright/
+artifacts/

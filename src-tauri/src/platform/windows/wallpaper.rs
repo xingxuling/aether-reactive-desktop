@@ -2,11 +2,12 @@ use serde::Serialize;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowExW, FindWindowW, GetSystemMetrics, GetWindowLongPtrW, IsWindow, SendMessageTimeoutW,
-    SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE, GWL_STYLE, HWND_BOTTOM,
-    SMTO_NORMAL, SM_CMONITORS, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
-    SM_YVIRTUALSCREEN, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_SHOWNA, WS_CHILD,
-    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP,
+    FindWindowExW, FindWindowW, GetSystemMetrics, GetWindowLongPtrW, GetWindowThreadProcessId,
+    IsWindow, SendMessageTimeoutW, SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+    GWL_EXSTYLE, GWL_STYLE, HWND_BOTTOM, SMTO_NORMAL, SM_CMONITORS, SM_CXVIRTUALSCREEN,
+    SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+    SWP_SHOWWINDOW, SW_SHOWNA, WS_CHILD, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+    WS_POPUP,
 };
 
 const DESKTOP_MESSAGE: u32 = 0x052C;
@@ -73,6 +74,7 @@ pub fn discover_desktop_host(checked_at: String) -> DesktopHostReport {
         }
         .ok();
 
+        let explorer_pid = process_id(progman_hwnd);
         let mut after = None;
         loop {
             let candidate = unsafe {
@@ -80,6 +82,7 @@ pub fn discover_desktop_host(checked_at: String) -> DesktopHostReport {
             }
             .ok();
             let Some(candidate) = candidate else { break };
+            let candidate_style = unsafe { GetWindowLongPtrW(candidate, GWL_EXSTYLE) as u32 };
             let has_icons = unsafe {
                 FindWindowExW(
                     Some(candidate),
@@ -89,7 +92,11 @@ pub fn discover_desktop_host(checked_at: String) -> DesktopHostReport {
                 )
             }
             .is_ok();
-            if !has_icons {
+            let belongs_to_explorer = explorer_pid.is_some_and(|pid| {
+                process_id(candidate).is_some_and(|candidate_pid| candidate_pid == pid)
+            });
+            let is_topmost = (candidate_style & WS_EX_TOPMOST.0) != 0;
+            if belongs_to_explorer && !is_topmost && !has_icons {
                 worker_w = Some(candidate);
                 break;
             }
@@ -97,7 +104,7 @@ pub fn discover_desktop_host(checked_at: String) -> DesktopHostReport {
         }
     }
 
-    let host_found = progman.is_some() && worker_w.is_some();
+    let host_found = progman.is_some() && shell_def_view.is_some() && worker_w.is_some();
     DesktopHostReport {
         status: if host_found { "candidate" } else { "blocked" }.to_string(),
         progman: progman.map(hwnd_value),
@@ -105,11 +112,11 @@ pub fn discover_desktop_host(checked_at: String) -> DesktopHostReport {
         worker_w: worker_w.map(hwnd_value),
         host_found,
         display,
-        strategy: "Progman → WorkerW → SHELLDLL_DefView".to_string(),
+        strategy: "Progman → Explorer WorkerW → SHELLDLL_DefView".to_string(),
         evidence: if host_found {
-            "WorkerW candidate discovered. Hard A–J Windows integration evidence is still required before TRUE_WALLPAPER_VERIFIED.".to_string()
+            "An Explorer-owned, non-topmost WorkerW candidate was discovered. Hard A–J Windows integration evidence is still required before TRUE_WALLPAPER_VERIFIED.".to_string()
         } else {
-            "Progman/WorkerW host was not discovered in this Windows session; no fake fullscreen fallback is used.".to_string()
+            "The Explorer desktop host was not discovered in this Windows session; no fake fullscreen fallback is used.".to_string()
         },
         checked_at,
     }
@@ -126,11 +133,16 @@ pub fn attach_window(hwnd: HWND, host: HWND, geometry: &DisplayGeometry) -> Resu
     let style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) as u32 };
     let child_style = (style | WS_CHILD.0) & !WS_POPUP.0;
     unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, child_style as isize) };
-    let extended_style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32 };
-    let extended_style = extended_style | WS_EX_NOACTIVATE.0 | WS_EX_TOOLWINDOW.0;
+    let original_extended_style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32 };
+    let extended_style = original_extended_style | WS_EX_NOACTIVATE.0 | WS_EX_TOOLWINDOW.0;
     unsafe { SetWindowLongPtrW(hwnd, GWL_EXSTYLE, extended_style as isize) };
-    unsafe { SetParent(hwnd, Some(host)) }
-        .map_err(|error| format!("SetParent(WorkerW): {error}"))?;
+    if let Err(error) = unsafe { SetParent(hwnd, Some(host)) } {
+        unsafe {
+            SetWindowLongPtrW(hwnd, GWL_STYLE, style as isize);
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, original_extended_style as isize);
+        }
+        return Err(format!("SetParent(Explorer WorkerW): {error}"));
+    }
     unsafe {
         SetWindowPos(
             hwnd,
@@ -176,6 +188,12 @@ pub fn display_geometry() -> DisplayGeometry {
 
 fn hwnd_value(hwnd: HWND) -> isize {
     hwnd.0 as isize
+}
+
+fn process_id(hwnd: HWND) -> Option<u32> {
+    let mut pid = 0u32;
+    let thread_id = unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+    (thread_id != 0 && pid != 0).then_some(pid)
 }
 
 fn wide(value: &str) -> Vec<u16> {
