@@ -34,10 +34,14 @@ export function LocalAudioPlayer({ onAudio, onMedia }: LocalAudioPlayerProps) {
     const samples = new Float32Array(graph.analyser.fftSize);
     let animationFrame = 0;
     const sample = () => {
-      graph.analyser.getFloatTimeDomainData(samples);
-      const next = analyzePcmWindow(samples, previousBinsRef.current, "local-file", fileNameRef.current);
-      previousBinsRef.current = next.frequencyBins;
-      onAudio({ ...next, audioActive: !audio.paused && !next.silence, source: "local-file" });
+      // An empty local player must not overwrite system audio or an explicit
+      // Demo Pulse with a synthetic zero-volume local-file state.
+      if (fileNameRef.current) {
+        graph.analyser.getFloatTimeDomainData(samples);
+        const next = analyzePcmWindow(samples, previousBinsRef.current, "local-file", fileNameRef.current);
+        previousBinsRef.current = next.frequencyBins;
+        onAudio({ ...next, audioActive: !audio.paused && !next.silence, source: "local-file" });
+      }
       animationFrame = window.requestAnimationFrame(sample);
     };
     const onPlay = () => {

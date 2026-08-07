@@ -199,9 +199,16 @@ export function App() {
       dispatch({ type: "scene:update", payload: { audioMode: "system", audioReactiveEnabled: true } });
       return report;
     }
-    setDemoMode(true);
+    // A failed or unavailable system-audio provider must stay quiet. Demo Pulse
+    // is an explicit user action in Music Halo, not a silent success substitute.
+    setDemoMode(false);
     dispatch({ type: "scene:update", payload: { audioMode: "system", audioReactiveEnabled: true } });
     return report;
+  }, [dispatch]);
+
+  const startDemo = useCallback(() => {
+    setDemoMode(true);
+    dispatch({ type: "audio:update", payload: makeDemoAudioState(Date.now()) });
   }, [dispatch]);
 
   const startAether = useCallback(async () => {
@@ -212,7 +219,14 @@ export function App() {
     const [wallpaperReport, audioReport] = await Promise.all([enableWallpaper(), startAudio()]);
     setNativeStatus((current) => ({ ...current, wallpaper: wallpaperReport, audio: audioReport }));
     dispatch({ type: "display:update", payload: { wallpaperHostStatus: wallpaperReport.status, wallpaperHost: wallpaperReport.hostFound ? "WorkerW" : null, monitorCount: wallpaperReport.display.monitorCount, dpiScale: wallpaperReport.display.dpiScale, virtualBounds: wallpaperReport.display.virtualBounds, lastHostCheckAt: wallpaperReport.checkedAt } });
-    if (!wallpaperReport.hostFound) setFirstRunMessage("桌面 Host 暂时没有挂载成功；已保留可见预览，状态会明确显示为 CANDIDATE / BLOCKED。");
+    const notices: string[] = [];
+    if (!audioReport.available || audioReport.status === "blocked" || audioReport.status === "error") {
+      notices.push("暂时没有检测到系统声音。当前保持 Quiet，不会自动播放 Demo；请在 Music Halo 中手动选择 Play Demo 或本地音频。");
+    }
+    if (!wallpaperReport.hostFound) {
+      notices.push("桌面 Host 暂时没有挂载成功；已保留可见预览，状态会明确显示为 CANDIDATE / BLOCKED。");
+    }
+    setFirstRunMessage(notices.length > 0 ? notices.join(" ") : null);
     setScreen("home");
   }, [dispatch, startAudio]);
 
@@ -246,7 +260,7 @@ export function App() {
           <main className="main-content">
             {screen === "home" ? <HomeView state={state} onNavigate={setScreen} onStartAudio={startAudio} message={firstRunMessage} /> : null}
             {screen === "scenes" ? <SceneBrowser state={state} onNavigate={setScreen} /> : null}
-            {screen === "music" ? <MusicView state={state} onStartAudio={startAudio} onDemo={() => setDemoMode(true)} onLocalAudio={(audio) => { setDemoMode(false); dispatch({ type: "audio:update", payload: audio }); dispatch({ type: "scene:update", payload: { audioMode: "local" } }); }} onMedia={(media) => dispatch({ type: "media:update", payload: media })} /> : null}
+            {screen === "music" ? <MusicView state={state} onStartAudio={startAudio} onDemo={startDemo} onLocalAudio={(audio) => { setDemoMode(false); dispatch({ type: "audio:update", payload: audio }); dispatch({ type: "scene:update", payload: { audioMode: "local" } }); }} onMedia={(media) => dispatch({ type: "media:update", payload: media })} /> : null}
             {screen === "wallpaper" ? <WallpaperView state={state} report={nativeStatus.wallpaper} onReport={(report) => { setNativeStatus((current) => ({ ...current, wallpaper: report })); dispatch({ type: "display:update", payload: { wallpaperHostStatus: report.status, wallpaperHost: report.hostFound ? "WorkerW" : null, monitorCount: report.display.monitorCount, dpiScale: report.display.dpiScale, virtualBounds: report.display.virtualBounds, lastHostCheckAt: report.checkedAt } }); }} /> : null}
             {screen === "aura" ? <AuraView state={state} /> : null}
             {screen === "settings" ? <SettingsView state={state} onStartup={async (enabled) => { const applied = await setLaunchOnLogin(enabled); dispatch({ type: "startup:update", payload: applied && enabled }); }} /> : null}

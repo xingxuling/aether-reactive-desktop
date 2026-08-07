@@ -5,9 +5,9 @@
 ## 已通过流程
 
 - 首次运行显示 `AETHER REACTIVE DESKTOP / FIRST RUN` 与 `Start Aether`。
-- 点击启动后进入新首页：Listening/Quiet、当前 Scene、大型预览、Change Scene、Music Halo、Window Aura、LOCAL ONLY。
+- 点击启动后进入新首页：Listening/Quiet、当前 Scene、大型预览、Change Scene、Music Halo、Window Aura、LOCAL ONLY；系统声音不可用时保持 `Quiet`，不会自动改成 Demo。
 - Scene Browser 显示 5 个场景；选择 Gold Pulse 后 Preview 更新，Apply Scene 可应用。
-- Music Halo 显示 System Audio、Play Demo、Local File Mode、Living Album Cover 和 latency 入口。
+- Music Halo 显示 System Audio、Play Demo、Local File Mode、Living Album Cover 和 latency 入口；只有显式点击 `Play Demo` 后才进入 `demo` 音频源。
 - Settings 显示 Quality/Balanced/Eco、FPS/Frame/Memory/Render、启动项、Audio Reactive 和 Window Aura。
 - 页面标题更新为 `Aether Reactive Desktop`，favicon 404 已修复；冒烟过程中没有新的应用 console error。
 
