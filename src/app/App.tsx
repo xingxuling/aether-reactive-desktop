@@ -68,10 +68,13 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return undefined;
+    // The wallpaper surface is a read-only projection of the main runtime.
+    // It must never persist its own boot-time/default state back over the
+    // interactive window after Start Aether completes.
+    if (!hydrated || isWallpaperWindow) return undefined;
     const timer = window.setTimeout(() => void persistNow(), 680);
     return () => window.clearTimeout(timer);
-  }, [hydrated, persistNow, state]);
+  }, [hydrated, isWallpaperWindow, persistNow, state]);
 
   useEffect(() => {
     if (!hydrated) return undefined;
@@ -111,7 +114,9 @@ export function App() {
   }, [dispatch, hydrated, isWallpaperWindow]);
 
   useEffect(() => {
-    if (!hydrated) return undefined;
+    // Performance telemetry belongs to the main window. A wallpaper surface
+    // must remain a passive projection and must not broadcast a stale state.
+    if (!hydrated || isWallpaperWindow) return undefined;
     let frameHandle = 0;
     let frameCount = 0;
     let totalFrameTime = 0;
@@ -154,7 +159,7 @@ export function App() {
       window.cancelAnimationFrame(frameHandle);
       window.clearInterval(sampleTimer);
     };
-  }, [dispatch, hydrated]);
+  }, [dispatch, hydrated, isWallpaperWindow]);
 
   useEffect(() => {
     if (!hydrated || isWallpaperWindow) return undefined;
