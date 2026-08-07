@@ -297,10 +297,6 @@ async fn enable_wallpaper(
     let native_hwnd = window.hwnd().map_err(|error| error.to_string())?;
     let worker_hwnd = windows::Win32::Foundation::HWND(worker_value as *mut core::ffi::c_void);
     wallpaper::attach_window(native_hwnd, worker_hwnd, &report.display)?;
-    window
-        .set_focusable(false)
-        .map_err(|error| error.to_string())?;
-    window.show().map_err(|error| error.to_string())?;
     if let Ok(mut current) = controller.window_hwnd.lock() {
         *current = Some(native_hwnd.0 as isize);
     }
@@ -317,7 +313,6 @@ fn disable_wallpaper(
     if let Some(window) = app.get_webview_window("wallpaper") {
         let hwnd = window.hwnd().map_err(|error| error.to_string())?;
         wallpaper::detach_window(hwnd)?;
-        window.hide().map_err(|error| error.to_string())?;
     }
     if let Ok(mut current) = controller.window_hwnd.lock() {
         *current = None;

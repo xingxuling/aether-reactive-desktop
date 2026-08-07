@@ -129,7 +129,8 @@ pub fn attach_window(hwnd: HWND, host: HWND, geometry: &DisplayGeometry) -> Resu
     let extended_style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32 };
     let extended_style = extended_style | WS_EX_NOACTIVATE.0 | WS_EX_TOOLWINDOW.0;
     unsafe { SetWindowLongPtrW(hwnd, GWL_EXSTYLE, extended_style as isize) };
-    unsafe { SetParent(hwnd, Some(host)) }.map_err(|error| error.to_string())?;
+    unsafe { SetParent(hwnd, Some(host)) }
+        .map_err(|error| format!("SetParent(WorkerW): {error}"))?;
     unsafe {
         SetWindowPos(
             hwnd,
@@ -141,7 +142,7 @@ pub fn attach_window(hwnd: HWND, host: HWND, geometry: &DisplayGeometry) -> Resu
             SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED,
         )
     }
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| format!("SetWindowPos(WorkerW): {error}"))?;
     unsafe {
         let _ = ShowWindow(hwnd, SW_SHOWNA);
     }
@@ -149,7 +150,7 @@ pub fn attach_window(hwnd: HWND, host: HWND, geometry: &DisplayGeometry) -> Resu
 }
 
 pub fn detach_window(hwnd: HWND) -> Result<(), String> {
-    unsafe { SetParent(hwnd, None) }.map_err(|error| error.to_string())?;
+    unsafe { SetParent(hwnd, None) }.map_err(|error| format!("SetParent(Desktop): {error}"))?;
     unsafe {
         let _ = ShowWindow(hwnd, windows::Win32::UI::WindowsAndMessaging::SW_HIDE);
     }
