@@ -10,6 +10,7 @@
 - Music Halo 显示 System Audio、Play Demo、Local File Mode、Living Album Cover 和 latency 入口；只有显式点击 `Play Demo` 后才进入 `demo` 音频源。
 - Settings 显示 Quality/Balanced/Eco、FPS/Frame/Memory/Render、启动项、Audio Reactive 和 Window Aura。
 - Native first-run 回退根因已定位并修复：Wallpaper WebView 现在只读主窗口状态，不再持久化自己的默认状态，也不再广播自己的性能采样覆盖主窗口。
+- Wallpaper 检查、启用和恢复现在都有超时/错误回收；成功挂载返回 `ATTACHED`，失败不会永久停留在 `检查中…`。
 - 页面标题更新为 `Aether Reactive Desktop`，favicon 404 已修复；冒烟过程中没有新的应用 console error。
 
 ## 边界

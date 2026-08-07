@@ -8,8 +8,8 @@
 
 | 产物 | 大小 | SHA-256 | 结论 |
 |---|---:|---|---|
-| `src-tauri/target/release/bundle/msi/Aether Reactive Desktop_0.2.0_x64_en-US.msi` | 3,174,400 bytes | `35A65AF2CA183F258C5ED8AAA5FAAA27A309FC1B63ED71970A2DE22F4E6935B7` | 本机生成 |
-| `src-tauri/target/release/bundle/nsis/Aether Reactive Desktop_0.2.0_x64-setup.exe` | 2,117,325 bytes | `A593A605AE47A2F07A833272BC0F81BCF0BAA9C610FF84163B657E35AAED6BB2` | 本机生成 |
+| `src-tauri/target/release/bundle/msi/Aether Reactive Desktop_0.2.0_x64_en-US.msi` | 3,174,400 bytes | `517280DC55937DB6066913DCA2D99A92808E0A6C755184EBA5D0276F0F962C84` | 本机生成 |
+| `src-tauri/target/release/bundle/nsis/Aether Reactive Desktop_0.2.0_x64-setup.exe` | 2,114,325 bytes | `BBCFCFD9876127861BD4D8E361215D2359D2662752BE375157D845BB5DFA72BD` | 本机生成 |
 
 Release EXE 使用 `--background` 启动并保持存活 8 秒，随后由验证步骤停止；本次修复后的 NSIS 安装器静默升级返回 exit code 0。以上证明当前机可构建与安装，不等同于 clean VM、签名、SmartScreen、完整安装/升级/卸载或真实壁纸验收。
 

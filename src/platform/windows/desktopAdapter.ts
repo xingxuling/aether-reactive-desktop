@@ -3,33 +3,57 @@ import { listen } from "@tauri-apps/api/event";
 import type { AudioReactiveState, ReactiveDesktopState } from "../../core/reactive-state/types";
 import type { DesktopHostReport, MediaSessionReport, NativeForegroundWindow, SystemAudioReport } from "./types";
 
+const NATIVE_OPERATION_TIMEOUT_MS = 8_000;
+
+function withNativeTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`${label} 超时（${NATIVE_OPERATION_TIMEOUT_MS / 1000} 秒）。`));
+    }, NATIVE_OPERATION_TIMEOUT_MS);
+    operation.then((value) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve(value);
+    }, (error) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      reject(error);
+    });
+  });
+}
+
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
 export async function discoverDesktopHost(): Promise<DesktopHostReport> {
   if (!isTauriRuntime()) return browserDesktopHostReport();
-  return invoke<DesktopHostReport>("discover_desktop_host");
+  return withNativeTimeout(invoke<DesktopHostReport>("discover_desktop_host"), "Windows 桌面 Host 检查");
 }
 
 export async function enableWallpaper(): Promise<DesktopHostReport> {
   if (!isTauriRuntime()) return browserDesktopHostReport();
-  return invoke<DesktopHostReport>("enable_wallpaper");
+  return withNativeTimeout(invoke<DesktopHostReport>("enable_wallpaper"), "启用 Aether Wallpaper");
 }
 
 export async function disableWallpaper(): Promise<void> {
   if (!isTauriRuntime()) return;
-  await invoke("disable_wallpaper");
+  await withNativeTimeout(invoke("disable_wallpaper"), "恢复 Windows 桌面");
 }
 
 export async function startSystemAudio(): Promise<SystemAudioReport> {
   if (!isTauriRuntime()) return { status: "candidate", available: false, endpoint: null, sampleRate: null, channels: null, capturedFrames: 0, nonZeroFrames: 0, message: "浏览器预览没有 WASAPI；使用 Demo Pulse。", checkedAt: new Date().toISOString() };
-  return invoke<SystemAudioReport>("start_system_audio");
+  return withNativeTimeout(invoke<SystemAudioReport>("start_system_audio"), "启动 WASAPI 系统声音");
 }
 
 export async function stopSystemAudio(): Promise<SystemAudioReport | null> {
   if (!isTauriRuntime()) return null;
-  return invoke<SystemAudioReport>("stop_system_audio");
+  return withNativeTimeout(invoke<SystemAudioReport>("stop_system_audio"), "停止 WASAPI 系统声音");
 }
 
 export async function getForegroundWindow(): Promise<NativeForegroundWindow> {

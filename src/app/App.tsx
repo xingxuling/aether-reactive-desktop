@@ -221,18 +221,23 @@ export function App() {
     sensorsStartedRef.current = true;
     dispatch({ type: "first-run:complete" });
     dispatch({ type: "scene:update", payload: { activeSceneId: "deep-sky", previewSceneId: null, wallpaperEnabled: true, audioReactiveEnabled: true, paused: false } });
-    const [wallpaperReport, audioReport] = await Promise.all([enableWallpaper(), startAudio()]);
-    setNativeStatus((current) => ({ ...current, wallpaper: wallpaperReport, audio: audioReport }));
-    dispatch({ type: "display:update", payload: { wallpaperHostStatus: wallpaperReport.status, wallpaperHost: wallpaperReport.hostFound ? "WorkerW" : null, monitorCount: wallpaperReport.display.monitorCount, dpiScale: wallpaperReport.display.dpiScale, virtualBounds: wallpaperReport.display.virtualBounds, lastHostCheckAt: wallpaperReport.checkedAt } });
-    const notices: string[] = [];
-    if (!audioReport.available || audioReport.status === "blocked" || audioReport.status === "error") {
-      notices.push("暂时没有检测到系统声音。当前保持 Quiet，不会自动播放 Demo；请在 Music Halo 中手动选择 Play Demo 或本地音频。");
+    try {
+      const [wallpaperReport, audioReport] = await Promise.all([enableWallpaper(), startAudio()]);
+      setNativeStatus((current) => ({ ...current, wallpaper: wallpaperReport, audio: audioReport }));
+      dispatch({ type: "display:update", payload: { wallpaperHostStatus: wallpaperReport.status, wallpaperHost: wallpaperReport.hostFound ? "WorkerW" : null, monitorCount: wallpaperReport.display.monitorCount, dpiScale: wallpaperReport.display.dpiScale, virtualBounds: wallpaperReport.display.virtualBounds, lastHostCheckAt: wallpaperReport.checkedAt } });
+      const notices: string[] = [];
+      if (!audioReport.available || audioReport.status === "blocked" || audioReport.status === "error") {
+        notices.push("暂时没有检测到系统声音。当前保持 Quiet，不会自动播放 Demo；请在 Music Halo 中手动选择 Play Demo 或本地音频。");
+      }
+      if (!wallpaperReport.hostFound) {
+        notices.push("桌面 Host 暂时没有挂载成功；已保留可见预览，状态会明确显示为 CANDIDATE / BLOCKED。");
+      }
+      setFirstRunMessage(notices.length > 0 ? notices.join(" ") : null);
+    } catch (error) {
+      setFirstRunMessage(`Windows 原生层启动失败：${formatNativeError(error)} 当前保持 Quiet，可在 Wallpaper / Music Halo 中重试。`);
+    } finally {
+      setScreen("home");
     }
-    if (!wallpaperReport.hostFound) {
-      notices.push("桌面 Host 暂时没有挂载成功；已保留可见预览，状态会明确显示为 CANDIDATE / BLOCKED。");
-    }
-    setFirstRunMessage(notices.length > 0 ? notices.join(" ") : null);
-    setScreen("home");
   }, [dispatch, startAudio]);
 
   useEffect(() => {
@@ -315,17 +320,20 @@ function SceneBrowser({ state, onNavigate }: { state: ReactiveDesktopState; onNa
 
 function MusicView({ state, onStartAudio, onDemo, onLocalAudio, onMedia }: { state: ReactiveDesktopState; onStartAudio: () => Promise<SystemAudioReport>; onDemo: () => void; onLocalAudio: (audio: AudioReactiveState) => void; onMedia: (media: MediaState) => void }) {
   const [busy, setBusy] = useState(false);
-  const start = async () => { setBusy(true); await onStartAudio(); setBusy(false); };
-  return <div className="page-view"><PageHeading eyebrow="MUSIC HALO PRO" title="让桌面听见正在播放的声音" description="System Audio 是主路径，Local File 保留为可控的回退；没有媒体元数据时，视觉继续用 Generic Cover 响应。" /><div className="music-hero glass-panel"><div className="music-copy"><span className="status-pill"><i className={`pulse ${state.audioState.audioActive ? "live-pulse" : ""}`} /> {state.audioState.audioActive ? "LISTENING" : "QUIET"}</span><h2>{state.audioState.audioActive ? "反应已经在发生" : "现在播放一首歌"}</h2><p>{state.audioState.audioActive ? `${Math.round(state.audioState.energy * 100)}% energy · bass ${Math.round(state.audioState.bass * 100)} · mid ${Math.round(state.audioState.mid * 100)} · treble ${Math.round(state.audioState.treble * 100)}` : "Aether 会尝试接入 Windows 系统混音；如果不可用，你仍可以播放 Demo 或导入本地文件。"}</p><div className="button-row"><button className="primary-button" onClick={() => void start()} disabled={busy}>{busy ? "正在连接…" : "System Audio"}</button><button className="outline-button" onClick={onDemo}>Play Demo</button></div></div><div className="music-orb"><ReactiveSceneCanvas state={state} compact /></div></div><div className="music-columns"><section className="glass-panel panel-pad"><div className="card-topline"><span className="eyebrow">LOCAL FILE MODE</span><span className="source-badge verified">AVAILABLE</span></div><LocalAudioPlayer onAudio={onLocalAudio} onMedia={onMedia} /></section><section className="glass-panel panel-pad"><div className="card-topline"><span className="eyebrow">LIVING ALBUM COVER</span><span className={`source-badge ${state.mediaState.availability === "available" ? "verified" : "candidate"}`}>{state.mediaState.availability.toUpperCase()}</span></div><h3>{state.mediaState.title ?? "Generic Cover"}</h3><p>{state.mediaState.artist ?? "等待媒体提供标题与艺术家"}</p><p className="boundary-note">Provider: {state.mediaState.provider} · {state.mediaState.albumArtUrl ? "真实封面" : "程序化封面"}<br />GSMTC: metadata provider status is reported honestly.</p><div className="latency-grid"><Metric label="Capture" value={state.audioState.captureLatencyMs} /><Metric label="DSP" value={state.audioState.dspLatencyMs} /><Metric label="Render" value={state.audioState.renderLatencyMs} /><Metric label="Total" value={state.audioState.totalVisualResponseLatencyMs} /></div></section></div></div>;
+  const [error, setError] = useState<string | null>(null);
+  const start = async () => { setBusy(true); setError(null); try { await onStartAudio(); } catch (nextError) { setError(`系统声音启动失败：${formatNativeError(nextError)}`); } finally { setBusy(false); } };
+  return <div className="page-view"><PageHeading eyebrow="MUSIC HALO PRO" title="让桌面听见正在播放的声音" description="System Audio 是主路径，Local File 保留为可控的回退；没有媒体元数据时，视觉继续用 Generic Cover 响应。" />{error ? <div className="notice candidate-note">{error}</div> : null}<div className="music-hero glass-panel"><div className="music-copy"><span className="status-pill"><i className={`pulse ${state.audioState.audioActive ? "live-pulse" : ""}`} /> {state.audioState.audioActive ? "LISTENING" : "QUIET"}</span><h2>{state.audioState.audioActive ? "反应已经在发生" : "现在播放一首歌"}</h2><p>{state.audioState.audioActive ? `${Math.round(state.audioState.energy * 100)}% energy · bass ${Math.round(state.audioState.bass * 100)} · mid ${Math.round(state.audioState.mid * 100)} · treble ${Math.round(state.audioState.treble * 100)}` : "Aether 会尝试接入 Windows 系统混音；如果不可用，你仍可以播放 Demo 或导入本地文件。"}</p><div className="button-row"><button className="primary-button" onClick={() => void start()} disabled={busy}>{busy ? "正在连接…" : "System Audio"}</button><button className="outline-button" onClick={onDemo}>Play Demo</button></div></div><div className="music-orb"><ReactiveSceneCanvas state={state} compact /></div></div><div className="music-columns"><section className="glass-panel panel-pad"><div className="card-topline"><span className="eyebrow">LOCAL FILE MODE</span><span className="source-badge verified">AVAILABLE</span></div><LocalAudioPlayer onAudio={onLocalAudio} onMedia={onMedia} /></section><section className="glass-panel panel-pad"><div className="card-topline"><span className="eyebrow">LIVING ALBUM COVER</span><span className={`source-badge ${state.mediaState.availability === "available" ? "verified" : "candidate"}`}>{state.mediaState.availability.toUpperCase()}</span></div><h3>{state.mediaState.title ?? "Generic Cover"}</h3><p>{state.mediaState.artist ?? "等待媒体提供标题与艺术家"}</p><p className="boundary-note">Provider: {state.mediaState.provider} · {state.mediaState.albumArtUrl ? "真实封面" : "程序化封面"}<br />GSMTC: metadata provider status is reported honestly.</p><div className="latency-grid"><Metric label="Capture" value={state.audioState.captureLatencyMs} /><Metric label="DSP" value={state.audioState.dspLatencyMs} /><Metric label="Render" value={state.audioState.renderLatencyMs} /><Metric label="Total" value={state.audioState.totalVisualResponseLatencyMs} /></div></section></div></div>;
 }
 
 function WallpaperView({ state, report, onReport }: { state: ReactiveDesktopState; report: DesktopHostReport | null; onReport: (report: DesktopHostReport) => void }) {
   const [busy, setBusy] = useState(false);
-  const check = async () => { setBusy(true); const next = await discoverDesktopHost(); onReport(next); setBusy(false); };
-  const enable = async () => { setBusy(true); const next = await enableWallpaper(); onReport(next); setBusy(false); };
-  const disable = async () => { setBusy(true); await disableWallpaper(); const next = await discoverDesktopHost(); onReport(next); setBusy(false); };
+  const [error, setError] = useState<string | null>(null);
+  const check = async () => { setBusy(true); setError(null); try { const next = await discoverDesktopHost(); onReport(next); } catch (nextError) { setError(`检查桌面 Host 失败：${formatNativeError(nextError)}`); } finally { setBusy(false); } };
+  const enable = async () => { setBusy(true); setError(null); try { const next = await enableWallpaper(); onReport(next); } catch (nextError) { setError(`启用桌面封面失败：${formatNativeError(nextError)}`); } finally { setBusy(false); } };
+  const disable = async () => { setBusy(true); setError(null); try { await disableWallpaper(); const next = await discoverDesktopHost(); onReport(next); } catch (nextError) { setError(`恢复桌面失败：${formatNativeError(nextError)}`); } finally { setBusy(false); } };
   const current = report ?? { status: state.displayState.wallpaperHostStatus === "attached" ? "attached" : "candidate", hostFound: state.displayState.wallpaperHostStatus === "attached", strategy: "Progman → WorkerW → SHELLDLL_DefView", evidence: "等待真实 Windows 检查。", checkedAt: state.displayState.lastHostCheckAt ?? "—", progman: null, shellDefView: null, workerW: null, display: { monitorCount: state.displayState.monitorCount, dpiScale: state.displayState.dpiScale, virtualBounds: state.displayState.virtualBounds } };
-  return <div className="page-view"><PageHeading eyebrow="TRUE AETHER WALLPAPER" title="把视觉放到 Windows 桌面层" description="这里展示的是原生挂载边界。普通无边框窗口、置底窗口和假全屏不会被标记为 Verified。" action={<button className="outline-button" onClick={() => void check()} disabled={busy}>{busy ? "检查中…" : "Discover Desktop Host"}</button>} /><div className="wallpaper-layout"><div className="wallpaper-preview glass-panel"><ReactiveSceneCanvas state={state} /><div className="preview-corner"><span className={`source-badge ${current.status === "attached" ? "verified" : "candidate"}`}>TRUE WALLPAPER = {current.status.toUpperCase()}</span></div></div><section className="glass-panel panel-pad native-report"><div className="card-topline"><span className="eyebrow">WINDOWS NATIVE BOUNDARY</span><span className={`source-badge ${current.hostFound ? "verified" : "candidate"}`}>{current.hostFound ? "HOST FOUND" : "CANDIDATE"}</span></div><h3>{current.hostFound ? "WorkerW host 已发现" : "等待 WorkerW host"}</h3><p>{current.evidence}</p><dl className="report-list"><div><dt>Strategy</dt><dd>{current.strategy}</dd></div><div><dt>Progman</dt><dd>{formatHandle(current.progman)}</dd></div><div><dt>SHELLDLL_DefView</dt><dd>{formatHandle(current.shellDefView)}</dd></div><div><dt>WorkerW</dt><dd>{formatHandle(current.workerW)}</dd></div><div><dt>Display</dt><dd>{current.display.monitorCount} monitor · {current.display.dpiScale.toFixed(2)}x</dd></div></dl><div className="button-row"><button className="primary-button" onClick={() => void enable()} disabled={busy}>Enable Wallpaper</button><button className="outline-button" onClick={() => void disable()} disabled={busy}>Restore Desktop</button></div><p className="boundary-note">Hard acceptance A–J requires Windows Integration Evidence. This screen does not promote a candidate to TRUE_WALLPAPER_VERIFIED.</p></section></div></div>;
+  const attached = current.status === "attached";
+  return <div className="page-view"><PageHeading eyebrow="TRUE AETHER WALLPAPER" title="把视觉放到 Windows 桌面层" description="这里展示的是原生挂载边界。普通无边框窗口、置底窗口和假全屏不会被标记为 Verified。" action={<button className="outline-button" onClick={() => void check()} disabled={busy}>{busy ? "检查中…" : "Discover Desktop Host"}</button>} />{error ? <div className="notice candidate-note">{error}</div> : null}<div className="wallpaper-layout"><div className="wallpaper-preview glass-panel"><ReactiveSceneCanvas state={state} /><div className="preview-corner"><span className={`source-badge ${attached ? "verified" : "candidate"}`}>TRUE WALLPAPER = {current.status.toUpperCase()}</span></div></div><section className="glass-panel panel-pad native-report"><div className="card-topline"><span className="eyebrow">WINDOWS NATIVE BOUNDARY</span><span className={`source-badge ${attached || current.hostFound ? "verified" : "candidate"}`}>{attached ? "ATTACHED" : current.hostFound ? "HOST FOUND" : "CANDIDATE"}</span></div><h3>{attached ? "Aether 已挂载到 WorkerW" : current.hostFound ? "WorkerW host 已发现" : "等待 WorkerW host"}</h3><p>{current.evidence}</p><dl className="report-list"><div><dt>Strategy</dt><dd>{current.strategy}</dd></div><div><dt>Progman</dt><dd>{formatHandle(current.progman)}</dd></div><div><dt>SHELLDLL_DefView</dt><dd>{formatHandle(current.shellDefView)}</dd></div><div><dt>WorkerW</dt><dd>{formatHandle(current.workerW)}</dd></div><div><dt>Display</dt><dd>{current.display.monitorCount} monitor · {current.display.dpiScale.toFixed(2)}x</dd></div></dl><div className="button-row"><button className="primary-button" onClick={() => void enable()} disabled={busy || attached}>Enable Wallpaper</button><button className="outline-button" onClick={() => void disable()} disabled={busy || !attached}>Restore Desktop</button></div><p className="boundary-note">Attached 表示本次 WorkerW 挂载调用成功；Explorer 重启恢复、多显示器/DPI 和 clean-VM 仍需额外验收。</p></section></div></div>;
 }
 
 function AuraView({ state }: { state: ReactiveDesktopState }) {
@@ -368,4 +376,10 @@ function formatClock(hour: number, minute: number): string {
 
 function formatHandle(value: number | null): string {
   return value === null ? "—" : `0x${value.toString(16)}`;
+}
+
+function formatNativeError(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  return "未知 Windows 原生错误。";
 }

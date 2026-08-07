@@ -304,7 +304,8 @@ async fn enable_wallpaper(
     if let Ok(mut current) = controller.window_hwnd.lock() {
         *current = Some(native_hwnd.0 as isize);
     }
-    report.evidence = "Aether webview was parented to the discovered WorkerW candidate. Hard acceptance A–J and Explorer-restart recovery are still required; this is not TRUE_WALLPAPER_VERIFIED.".to_string();
+    report.status = "attached".to_string();
+    report.evidence = "Aether webview was parented to the discovered WorkerW host. This call succeeded for the current Windows session; Explorer-restart recovery, multi-display/DPI and clean-VM evidence are still required before TRUE_WALLPAPER_VERIFIED.".to_string();
     Ok(report)
 }
 
