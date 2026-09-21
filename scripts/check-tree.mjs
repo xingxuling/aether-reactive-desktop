@@ -20,6 +20,7 @@ const required = [
   "docs/evidence/true-wallpaper-report.md",
   "docs/evidence/wasapi-loopback-report.md",
   "docs/evidence/windows-install-report.md",
+  "docs/evidence/repository-release.md",
 ];
 
 for (const file of required) await access(file);
